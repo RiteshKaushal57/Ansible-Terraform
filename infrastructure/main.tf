@@ -21,3 +21,12 @@ module "compute" {
   mongodb_sg_id = module.vpc.mongodb_sg_id
   environment = var.environment
 }
+
+module "alb" {
+  source = "./modules/alb"
+  vpc_id = module.vpc.vpc_id
+  subnets = [module.vpc.public_subnet_1_id, module.vpc.public_subnet_2_id]
+  alb_sg_id = module.vpc.alb_sg_id
+  web_server_ids = module.compute.web_server_ids
+  environment = var.environment
+}
