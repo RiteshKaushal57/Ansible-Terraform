@@ -31,6 +31,13 @@ variable "environment" {
 }
 
 variable "region" {
-  default = "ap-south-1"
   description = "The AWS region to deploy resources in"
+}
+
+variable "instance_type" {
+  description = "Type of the instance"
+}
+
+variable "key_name" {
+  description = "Key pair name"
 }
