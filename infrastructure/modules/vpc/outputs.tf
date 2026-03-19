@@ -2,15 +2,15 @@ output "vpc_id" {
  value = aws_vpc.main.id 
 }
 
-output "ansible_terraform_public_subnet_1_id" {
+output "at_public_subnet_1_id" {
   value = aws_subnet.at_public_subnet_1.id
 }
 
-output "ansible_terraform_public_subnet_2_id" {
+output "at_public_subnet_2_id" {
   value = aws_subnet.at_public_subnet_2.id
 }
 
-output "ansible_terraform_private_subnet_id" {
+output "at_private_subnet_id" {
   value = aws_subnet.at_private_subnet.id
 }
 

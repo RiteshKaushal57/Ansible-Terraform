@@ -6,13 +6,13 @@ resource "aws_subnet" "at_public_subnet_1" {
   vpc_id = aws_vpc.main.id
   cidr_block = var.public_subnet_1_cidr
   availability_zone = var.az_1
-  map_public_ip_on_launch = true
+  map_public_ip_on_launch = true # This line ensures that instances launched in this subnet will automatically receive a public IP address, allowing them to communicate with the internet.
 }
 
 resource "aws_subnet" "at_public_subnet_2" {
   vpc_id = aws_vpc.main.id
   cidr_block = var.public_subnet_2_cidr
-  availability_zone = var.az_2
+  availability_zone = var.az_2 
   map_public_ip_on_launch = true
 }
 
@@ -25,7 +25,6 @@ resource "aws_subnet" "at_private_subnet" {
 
 resource "aws_internet_gateway" "ansible_terraform" {
   vpc_id = aws_vpc.main.id
-
 }
 
 resource "aws_route_table" "public" {
@@ -40,13 +39,13 @@ resource "aws_route_table" "public" {
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
   route {
-    cidr_block = "0.0.0.0/0"
+    cidr_block = "0.0.0.0/0" 
     nat_gateway_id = aws_nat_gateway.main.id
   }
 }
 
 resource "aws_route_table_association" "public_subnet_1" {
-  subnet_id = aws_subnet.at_public_subnet_1.id
+  subnet_id = aws_subnet.at_public_subnet_1.id 
   route_table_id = aws_route_table.public.id
 }
 
@@ -60,13 +59,15 @@ resource "aws_route_table_association" "private_subnet" {
   route_table_id = aws_route_table.private.id
 }
 
-resource "aws_eip" "natgateway" {
+resource "aws_eip" "natgateway" { 
   domain = "vpc"
+
+  # A static public IP address that belongs to your AWS account. It does not change even if you restart resources. The NAT Gateway needs a fixed public IP to send outbound traffic from. When your private server makes a request to the internet, it goes through NAT Gateway which uses this Elastic IP as the source address. The response comes back to this IP and NAT forwards it back to the private server. Why domain = "vpc": This tells AWS this EIP is for use inside a VPC, not for EC2-Classic
 }
 
 resource "aws_nat_gateway" "main" {
-  allocation_id = aws_eip.natgateway.id
-  subnet_id = aws_subnet.at_public_subnet_1.id
+  allocation_id = aws_eip.natgateway.id # Attaches the Elastic IP to this NAT Gateway so it has a fixed public IP to use.
+  subnet_id = aws_subnet.at_public_subnet_1.id 
 }
 
 resource "aws_security_group" "alb" {
