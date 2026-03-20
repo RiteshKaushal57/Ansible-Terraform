@@ -37,6 +37,7 @@ resource "aws_route_table" "public" {
 }
 
 resource "aws_route_table" "private" {
+  
   vpc_id = aws_vpc.main.id
   route {
     cidr_block = "0.0.0.0/0" 
@@ -143,14 +144,14 @@ resource "aws_security_group" "mongodb" {
     from_port = 27017
     to_port = 27017
     protocol = "tcp"
-    cidr_blocks = [aws_security_group.web_server.id]
+    security_groups = [aws_security_group.web_server.id]
   }
 
   ingress {
     from_port = 22
     to_port = 22
     protocol = "tcp"
-    cidr_blocks = [aws_security_group.bastion.id]
+    security_groups = [aws_security_group.bastion.id]
   }
 
   egress {

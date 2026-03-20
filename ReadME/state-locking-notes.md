@@ -1,25 +1,10 @@
-# Bootstrap — Terraform Remote State Setup
+# Terraform Remote State Setup
 
 ## What This Is
 
-Before any Terraform project can run with remote state, the storage backend must exist. This bootstrap folder is a one-time setup that creates the infrastructure needed to store Terraform state files remotely on AWS.
+Before any Terraform project can run with remote state, the storage backend must exist. This backend folder is a one-time setup that creates the infrastructure needed to store Terraform state files remotely on AWS.
 
 This is run ONCE before the main infrastructure project. After that it is never touched again.
-
----
-
-## The Chicken and Egg Problem
-
-Terraform stores its memory (state) in a backend. To create an S3 bucket using Terraform, Terraform needs a backend to store the state of creating that bucket. But the backend does not exist yet because the bucket has not been created yet.
-
-```
-To create S3 bucket → need state backend
-State backend       → needs S3 bucket
-```
-
-This is why the bootstrap folder exists as a completely separate Terraform project with LOCAL state (no remote backend). It creates the remote backend, and then the main project uses that remote backend.
-
----
 
 ## Resources Created
 
@@ -33,12 +18,11 @@ aws_dynamodb_table                         → state locking
 
 Total: 5 resources
 
----
 
 ## Resources Explained
 
 ### S3 Bucket
-```terraform
+```
 resource "aws_s3_bucket" "s3_bucket" {
   bucket = "ansible-terraform-statefile"
 }
@@ -54,7 +38,7 @@ ansible-terraform-statefile/
 ```
 
 ### S3 Versioning
-```terraform
+```
 resource "aws_s3_bucket_versioning" "s3_bucket_versioning" {
   versioning_configuration {
     status = "Enabled"
@@ -64,7 +48,7 @@ resource "aws_s3_bucket_versioning" "s3_bucket_versioning" {
 Keeps every version of the state file. If something goes wrong during `terraform apply` and the state gets corrupted, you can restore a previous version from S3. This is like Git for your state file.
 
 ### Server Side Encryption
-```terraform
+```
 rule {
   apply_server_side_encryption_by_default {
     sse_algorithm = "AES256"
@@ -74,7 +58,7 @@ rule {
 Encrypts the state file at rest in S3 using AES-256 encryption. This is critical because state files contain sensitive information — IP addresses, resource IDs, and sometimes even passwords and connection strings. You never want this readable by anyone who accesses the bucket.
 
 ### Public Access Block
-```terraform
+```
 block_public_acls       = true
 block_public_policy     = true
 ignore_public_acls      = true
@@ -83,7 +67,7 @@ restrict_public_buckets = true
 Blocks all public access to the bucket. State files must NEVER be publicly accessible. These four settings together ensure no one can accidentally make the bucket or its contents public.
 
 ### DynamoDB Table — State Locking
-```terraform
+```
 resource "aws_dynamodb_table" "dynamodb_table" {
   name         = "ansible-terraform-state-lock"
   billing_mode = "PAY_PER_REQUEST"
@@ -98,7 +82,6 @@ This prevents state file corruption in team environments. `PAY_PER_REQUEST` mean
 
 `LockID` must be exactly this name with capital L and I — this is what the Terraform S3 backend looks for specifically.
 
----
 
 ## Why State Files Are Important
 
@@ -116,7 +99,6 @@ Without state:
 - Running `terraform apply` again would try to create duplicates
 - Running `terraform destroy` would not know what to delete
 
----
 
 ## Why Remote State vs Local State
 
@@ -128,13 +110,12 @@ Without state:
 | Locking | No | Yes via DynamoDB |
 | Real projects | Never | Always |
 
----
 
 ## backend.tf in Main Project
 
 After running bootstrap, the main infrastructure project points to this bucket:
 
-```terraform
+```
 terraform {
   backend "s3" {
     bucket         = "ansible-terraform-statefile"
@@ -154,15 +135,8 @@ terraform {
 | `use_lockfile` | Enable state locking |
 | `encrypt` | Encrypt state in transit |
 
----
 
 ## Questions and Answers
-
-### Q: Can we create the S3 bucket using Terraform instead of manually?
-
-Yes — and that is exactly what this bootstrap folder does. But it must be a SEPARATE Terraform project with local state because you cannot use remote state to create the thing that provides remote state. This is the chicken and egg problem.
-
-The bootstrap project uses local state. The main project uses remote state in the bucket bootstrap created.
 
 ### Q: What happens if two people run terraform apply at the same time without DynamoDB locking?
 
@@ -189,8 +163,6 @@ dev/project-2/terraform.tfstate
 prod/project-1/terraform.tfstate
 ```
 
----
-
 ## Important Commands
 
 ```bash
@@ -216,8 +188,6 @@ Ansible_+_Terraform/
     ├── backend.tf            ← points to S3 bucket bootstrap created
     └── ...
 ```
-
----
 
 ## Key Rule
 

@@ -68,8 +68,6 @@ Step 6 — Response travels back through ALB to user
          user sees the app
 ```
 
----
-
 ## Resources Explained
 
 ### aws_alb — The Load Balancer
@@ -154,8 +152,6 @@ When a server is marked unhealthy the ALB stops sending traffic to it automatica
 
 Without this block the ALB uses default health check settings which may not work with your app correctly.
 
----
-
 ### aws_alb_target_group_attachment — Registering Servers
 ```
 resource "aws_alb_target_group_attachment" "web_servers" {
@@ -182,8 +178,6 @@ Registers each web server into the target group. This resource runs twice — on
 
 **Why instance IDs and not IPs:**
 The ALB registers targets by instance ID not IP address. This is because private IPs can change if an instance is stopped and started. Instance IDs never change. The ALB always knows how to find the right server regardless of IP changes.
-
----
 
 ### aws_alb_listener — The Traffic Rule
 ```
@@ -215,7 +209,6 @@ The rule attached to the ALB that defines what to do with incoming traffic. Thin
 
 `target_group_arn` — forward to this target group which contains your two web servers.
 
----
 
 ## Why Port 80 on ALB and Port 5000 on Web Server
 
@@ -233,7 +226,6 @@ That is non-standard and ugly. Instead:
 
 The ALB translates between the public standard port and your app's internal port.
 
----
 
 ## What is ARN
 
@@ -247,8 +239,6 @@ arn:aws:elasticloadbalancing:ap-south-1:123456789:loadbalancer/app/dev-alb/abc
 
 When one resource needs to reference another, it uses the ARN. Names are not unique across accounts and regions but ARNs always are.
 
----
-
 ## How ALB Ensures MongoDB is Never Reached
 
 Three layers of protection:
@@ -261,8 +251,6 @@ MongoDB security group only allows port 27017 from web server security group. AL
 
 **Layer 3 — No public IP:**
 MongoDB is in private subnet with no public IP. Unreachable from internet regardless.
-
----
 
 ## Module Inputs (variables.tf)
 
@@ -334,10 +322,6 @@ Request 4 → Web Server 2
 ```
 This ensures neither server gets overloaded while the other sits idle.
 
-### Q: Why is the ALB expensive compared to other resources?
-
-ALB charges per hour plus per LCU (Load Balancer Capacity Unit) based on traffic. For a test project with minimal traffic the cost is about $0.0225 per hour — roughly $0.54 per day. Always run `terraform destroy` when done testing to avoid unnecessary charges. The NAT Gateway is actually more expensive than the ALB at $0.045 per hour.
-
 ### Q: In production would we use HTTP or HTTPS?
 
 Always HTTPS in production. You would:
@@ -346,8 +330,6 @@ Always HTTPS in production. You would:
 - Change the listener to port 443 with HTTPS
 - Add a second listener on port 80 that redirects to HTTPS
 For this project HTTP is fine since it is a learning exercise.
-
----
 
 ## Total Resource Count After All Three Modules
 
@@ -358,5 +340,3 @@ ALB Module       5 resources
 ─────────────────────────────
 Total           25 resources
 ```
-
-This is what `terraform plan` shows before apply.
