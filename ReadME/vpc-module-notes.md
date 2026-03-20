@@ -89,17 +89,15 @@ Every single variable follows this exact four station journey.
 ## Resources Explained
 
 ### VPC
-```terraform
+```
 resource "aws_vpc" "main" {
   cidr_block = var.vpc_cidr
 }
 ```
 Your private network bubble on AWS. Nothing inside is accessible from the internet unless explicitly allowed. Think of it as your own private data center. `cidr_block = 10.0.0.0/16` gives you 65,536 IP addresses to use across all subnets and servers.
 
----
-
 ### Public Subnet 1
-```terraform
+```
 resource "aws_subnet" "at_public_subnet_1" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.public_subnet_1_cidr
@@ -109,37 +107,29 @@ resource "aws_subnet" "at_public_subnet_1" {
 ```
 A slice of your VPC that can reach the internet. `map_public_ip_on_launch = true` means any server created here automatically gets a public IP. Bastion host lives here because you need to SSH into it from your laptop.
 
----
-
 ### Public Subnet 2
 Same as Public Subnet 1 but in a different availability zone (`ap-south-1b`). This subnet exists purely because the Application Load Balancer requires subnets in at least two different availability zones. It is an AWS hard requirement. Nothing else lives here.
 
 ---
 
 ### Private Subnet
-```terraform
+```
 resource "aws_subnet" "at_private_subnet" {
   map_public_ip_on_launch = false
 }
 ```
 Servers here have no public IP. Nobody on the internet knows they exist. Web servers and MongoDB live here. They are only reachable through the Bastion (SSH) or the Load Balancer (app traffic).
 
----
-
 ### Internet Gateway
-```terraform
+```
 resource "aws_internet_gateway" "ansible_terraform" {
   vpc_id = aws_vpc.main.id
 }
 ```
 The door between your VPC and the public internet. Without it, even servers with public IPs cannot be reached. The IGW alone does nothing — it needs a route table pointing traffic to it.
 
-**Note:** Internet Gateway is a managed AWS service, not an EC2 instance. You cannot attach a security group to it. It is controlled by route tables instead.
-
----
-
 ### Public Route Table
-```terraform
+```
 resource "aws_route_table" "public" {
   route {
     cidr_block = "0.0.0.0/0"
@@ -149,10 +139,8 @@ resource "aws_route_table" "public" {
 ```
 Traffic rules for public subnets. `0.0.0.0/0` means any destination. Combined: send all outbound traffic to the Internet Gateway. Without this rule, even though the IGW exists, packets do not know to use it.
 
----
-
 ### Private Route Table
-```terraform
+```
 resource "aws_route_table" "private" {
   route {
     cidr_block     = "0.0.0.0/0"
@@ -166,41 +154,46 @@ Traffic rules for the private subnet. Points to NAT Gateway instead of IGW. Priv
 - Route pointing to IGW = public (two-way internet traffic)
 - Route pointing to NAT = private (outbound only)
 
----
-
 ### Route Table Associations
 Three separate resources that glue subnets to their route tables. A route table does nothing until associated with a subnet.
 
-```
-Public Subnet 1  →  Public Route Table   →  traffic goes to IGW
-Public Subnet 2  →  Public Route Table   →  traffic goes to IGW
-Private Subnet   →  Private Route Table  →  traffic goes to NAT
-```
+- Public Subnet 1  →  Public Route Table   →  traffic goes to IGW    
+- Public Subnet 2  →  Public Route Table   →  traffic goes to IGW    
+- Private Subnet   →  Private Route Table  →  traffic goes to NAT     
 
----
+```
+resource "aws_route_table_association" "public_subnet_1" {
+  subnet_id = aws_subnet.at_public_subnet_1.id 
+  route_table_id = aws_route_table.public.id
+}
+
+resource "aws_route_table_association" "public_subnet_2" {
+  subnet_id = aws_subnet.at_public_subnet_2.id
+  route_table_id = aws_route_table.public.id
+}
+
+resource "aws_route_table_association" "private_subnet" {
+  subnet_id = aws_subnet.at_private_subnet.id
+  route_table_id = aws_route_table.private.id
+}
+```
 
 ### Elastic IP
-```terraform
+```
 resource "aws_eip" "natgateway" {
   domain = "vpc"
 }
 ```
 A static public IP address that belongs to your AWS account. NAT Gateway needs a fixed public IP to send outbound traffic from. When private servers make internet requests, they come from this IP address. `domain = "vpc"` tells AWS this EIP is for use inside a VPC.
 
----
-
 ### NAT Gateway
-```terraform
+```
 resource "aws_nat_gateway" "main" {
   allocation_id = aws_eip.natgateway.id
   subnet_id     = aws_subnet.at_public_subnet_1.id
 }
 ```
-Allows private servers to reach the internet without being reachable from the internet. Lives in the **public subnet** — this surprises everyone at first. It needs to be in the public subnet because it itself needs internet access to forward traffic. It is the middleman between private servers and the internet.
-
-**Note:** NAT Gateway is a managed AWS service. You cannot attach a security group to it. It is controlled by route tables.
-
----
+Allows private servers to reach the internet without being reachable from the internet. Lives in the **public subnet**. It needs to be in the public subnet because it itself needs internet access to forward traffic. It is the middleman between private servers and the internet.
 
 ### Security Groups
 
@@ -219,7 +212,7 @@ Security groups are virtual firewalls. Everything is blocked by default. You onl
 #### Understanding Security Group Arguments
 
 **`from_port` and `to_port`** — defines a range of ports to allow. When both are the same, exactly one port is allowed:
-```terraform
+```
 from_port = 22
 to_port   = 22   # exactly port 22 only
 ```
@@ -229,13 +222,13 @@ to_port   = 22   # exactly port 22 only
 - `"-1"` — all protocols. Used in egress to allow all outbound traffic
 
 **`cidr_blocks`** — used when the source is an IP address range:
-```terraform
+```
 cidr_blocks = ["0.0.0.0/0"]          # anyone on the internet
 cidr_blocks = ["103.45.67.89/32"]    # one specific IP only
 ```
 
 **`security_groups`** — used when the source is another security group (more secure than IP-based):
-```terraform
+```
 security_groups = [aws_security_group.bastion.id]
 # only traffic coming from instances in the bastion security group
 ```
@@ -259,10 +252,6 @@ Web Server Security Group
    ↓ port 22 (only from Bastion SG)
 MongoDB Security Group
 ```
-
-Every arrow is enforced by a security group rule. Nothing can skip a step.
-
----
 
 ## Questions and Answers
 
@@ -323,59 +312,11 @@ The real threats (SSH takeover, database access, internal port access) are all b
 
 In production, additional layers are added: HTTPS, WAF (Web Application Firewall), rate limiting, authentication on API routes.
 
----
-
-### Q: We said security groups are instance level security. Why did we not attach them to instances in this module?
-
-We only **create** security groups in the VPC module. We **attach** them to instances in the compute module.
-
-The security group IDs are passed as outputs from VPC module → root main.tf → compute module, where they are attached to EC2 instances like this:
-
-```terraform
-resource "aws_instance" "web_server" {
-  vpc_security_group_ids = [var.web_server_sg_id]  ← attached here
-}
-```
-
-The VPC module just creates and exposes them. The compute module uses them.
-
----
-
-### Q: Why is there no security group on the NAT Gateway or Internet Gateway?
-
-Because NAT Gateway and Internet Gateway are managed AWS services, not EC2 instances. Security groups can only be attached to EC2 instances and a few other specific services.
-
-NAT Gateway and IGW are controlled by route tables instead:
-- Only subnets with a route pointing to IGW can use it
-- Only subnets with a route pointing to NAT can use it
-
-Security happens at three layers:
-```
-EC2 instance level  →  Security Groups
-Subnet level        →  Route Tables  
-VPC level           →  Internet Gateway / NAT Gateway
-```
-
----
-
 ### Q: Why does egress allow all outbound traffic even on MongoDB?
 
 MongoDB needs to reach the internet for package installation when Ansible configures it (apt install mongodb). Without outbound access, Ansible cannot install anything. The server reaches the internet through NAT Gateway which is already restricted to outbound only.
 
 The real protection for MongoDB is its **ingress rules** — nobody can reach INTO it except web servers on port 27017 and bastion on port 22. Outbound traffic from a database is not the threat. Unauthorized inbound access is.
-
----
-
-### Q: Why does the private route table point to NAT Gateway and not Internet Gateway?
-
-If private subnet pointed to IGW it would become a public subnet — servers would get public IPs and be reachable from the internet. That defeats the purpose of a private subnet.
-
-NAT Gateway allows outbound-only internet access:
-- Private server sends request → NAT Gateway → internet (using NAT's public IP)
-- Response comes back → NAT Gateway → private server
-- Internet never initiates a connection TO the private server
-
----
 
 ## Module Inputs (variables.tf)
 
