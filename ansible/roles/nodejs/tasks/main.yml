@@ -1,0 +1,17 @@
+---
+- name: Add NodeSource repository
+  shell: curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+  args:
+    creates: /etc/apt/sources.list.d/nodesource.list
+
+- name: Install Node.js
+  apt:
+    name: nodejs
+    state: present
+    update_cache: yes
+
+- name: Install PM2 globally
+  npm:
+    name: pm2
+    global: yes
+    state: present

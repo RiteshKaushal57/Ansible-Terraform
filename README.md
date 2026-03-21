@@ -29,6 +29,48 @@ More updates coming as I complete each phase. 👷
 
 #DevOps #Terraform #AWS #InfrastructureAsCode #Learning #CloudComputing
 
+
+Phase 2 done. And this one taught me something really cool. 🔗
+
+Terraform built my servers. But Ansible had no idea they existed.
+
+So how does Ansible find them?
+
+Through an inventory file — basically a contact book that says:
+→ Here is the bastion at this public IP
+→ Here are the web servers at these private IPs
+→ Here is MongoDB at this private IP
+
+But there was a challenge.
+
+My web servers and database are in a private subnet. No public IP. Unreachable from the internet. Even Ansible cannot SSH into them directly.
+
+The solution? ProxyJump through the bastion.
+
+I configured Ansible to:
+1. SSH into the bastion first
+2. Tunnel through it to reach private servers
+3. Run tasks as if it connected directly
+
+And then I ran one command:
+ansible all -m ping
+
+All 4 servers replied with pong. ✅
+
+Bastion → pong
+Web Server 1 → pong
+Web Server 2 → pong
+MongoDB → pong
+
+Ansible can now reach every server in my infrastructure — including the ones that are completely hidden from the internet.
+
+This is Phase 2 of my DevOps project: connecting Terraform infrastructure to Ansible configuration.
+
+Next up — Phase 3: Ansible will install Node.js, MongoDB, and deploy the actual application. 🚀
+
+#DevOps #Ansible #Terraform #AWS #LearningInPublic #CloudComputing
+
+
 ## The Big Picture First
 
 Before any phase, understand what you're building mentally:
