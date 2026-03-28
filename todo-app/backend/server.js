@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const path = require('path');
 
 const todoRoutes = require('./routes/todos');
 
@@ -11,12 +12,20 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Routes
-app.use('/api/todos', todoRoutes);
-
-// Health check route (important for Load Balancer health checks)
+// 1. Health check first
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK' });
+});
+
+// 2. API routes
+app.use('/api/todos', todoRoutes);
+
+// 3. Serve React static files
+app.use(express.static(path.join(__dirname, '../../frontend/build')));
+
+// 4. Catch all — MUST be last
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../../frontend/build', 'index.html'));
 });
 
 // MongoDB Connection

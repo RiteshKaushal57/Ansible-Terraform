@@ -1,0 +1,11 @@
+---
+- name: Configure web servers
+  hosts: webservers
+  become: true
+  vars:
+    mongodb_ip: "10.0.2.221"
+    alb_dns_name: "dev-alb-51613694.ap-south-1.elb.amazonaws.com"
+  roles:
+    - common
+    - nodejs
+    - app

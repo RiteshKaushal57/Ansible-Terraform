@@ -15,6 +15,13 @@
     state: present
     update_cache: yes
 
+- name: Configure MongoDB to accept remote connections
+  lineinfile:
+    path: /etc/mongod.conf
+    regexp: '  bindIp:'
+    line: '  bindIp: 0.0.0.0'
+  notify: restart mongodb
+  
 - name: Start MongoDB service
   service:
     name: mongod

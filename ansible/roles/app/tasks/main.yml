@@ -1,0 +1,49 @@
+---
+- name: Create app directory
+  file:
+    path: /opt/todo-app
+    state: directory
+    owner: ubuntu
+    mode: '0755'
+
+- name: Clone application repository
+  git:
+    repo: https://github.com/RiteshKaushal57/Ansible-Terraform.git
+    dest: /opt/todo-app
+    version: main
+    force: yes
+
+- name: Install backend dependencies
+  npm:
+    path: /opt/todo-app/todo-app/backend
+
+- name: Create backend .env file
+  template:
+    src: .env.j2
+    dest: /opt/todo-app/todo-app/backend/.env
+    owner: ubuntu
+    mode: '0600'
+    force: yes
+
+- name: Install frontend dependencies
+  npm:
+    path: /opt/todo-app/todo-app/frontend
+
+- name: Build React frontend
+  shell: npm run build
+  args:
+    chdir: /opt/todo-app/todo-app/frontend
+  environment:
+    REACT_APP_API_URL: "http://{{ alb_dns_name }}"
+
+- name: Start application with PM2
+  shell: pm2 start server.js --name todo-app || pm2 restart todo-app
+  args:
+    chdir: /opt/todo-app/todo-app/backend
+
+- name: Save PM2 process list
+  shell: pm2 save
+
+- name: Configure PM2 startup
+  shell: env PATH=$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu
+  ignore_errors: true
