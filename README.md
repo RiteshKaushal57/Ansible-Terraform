@@ -70,122 +70,404 @@ Next up — Phase 3: Ansible will install Node.js, MongoDB, and deploy the actua
 
 #DevOps #Ansible #Terraform #AWS #LearningInPublic #CloudComputing
 
+Phase 3 and 4 done. My app is now live on AWS. 🚀
 
-## The Big Picture First
+Two weeks ago I had four blank Ubuntu servers running on AWS. No software. No application. Nothing.
 
-Before any phase, understand what you're building mentally:
+Today I opened a browser, typed a Load Balancer URL, and saw my app running live.
 
-You will have **3 types of servers** on AWS:
-- A **Bastion host** — just a doorway for you to SSH in. Nothing else runs here.
-- **Web server(s)** — your MERN app lives here (React frontend + Node/Express backend)
-- **MongoDB** — can run on the same web server to keep it simple, or a separate server
+Here is what happened in between.
 
-And **1 load balancer** sitting in front, receiving all user traffic.
+I used Ansible to automatically configure all four servers over SSH:
 
----
+→ MongoDB server got MongoDB 7.0 installed and configured to accept connections from web servers only
 
-## Phase 0 — Build the MERN App First (Locally)
+→ Both web servers got Node.js 18, PM2, my app code cloned from GitHub, environment variables configured, React frontend built, and the backend started as a background process
 
-Before touching any cloud, you need a working app on your own machine.
+All of this happened with two commands:
+ansible-playbook playbooks/mongodb.yml
+ansible-playbook playbooks/webservers.yml
 
-The app will be simple but real:
-- **Frontend** — React app with a to-do list (add, delete, mark complete)
-- **Backend** — Express API with 3-4 routes (GET, POST, DELETE todos)
-- **Database** — MongoDB storing the todos
+No manual SSH. No typing commands on servers. Ansible handled everything.
 
-The key thing here is **environment variables**. Your backend should not have the MongoDB connection string hardcoded. It should read from a `.env` file. This matters a lot later when Ansible configures the server.
+Some things I learned:
 
-Get it running locally first. That's your baseline.
+🔧 Roles keep things clean. Instead of one giant file I had separate roles for common setup, Node.js, MongoDB, and app deployment. Each role has one job.
 
----
+📄 Templates are powerful. My .env file has the MongoDB IP and ALB DNS name — values I only know after Terraform runs. Ansible fills them in automatically at deploy time.
 
-## Phase 1 — Terraform: Think in Layers
+⚡ PM2 keeps apps alive. Without it, closing SSH would kill the app. PM2 runs it in the background and restarts it if it crashes.
 
-When you sit down with Terraform, think of it as drawing a network diagram in code. Build it in this mental order:
+The app is now:
+✅ Running on two web servers behind a Load Balancer
+✅ Connected to a private MongoDB database
+✅ Accessible from anywhere via the ALB URL
+✅ Adding, completing, and deleting todos — all working
 
-**Layer 1 — The network itself**
-- Create a VPC (your private cloud bubble on AWS)
-- Create a public subnet (where bastion and load balancer live)
-- Create a private subnet (where your web server lives)
-- Attach an Internet Gateway so the public subnet can reach the internet
-- Create a NAT Gateway so the private subnet can reach the internet (to download packages) but nobody from outside can reach it directly
+This is the full DevOps lifecycle — infrastructure provisioned by Terraform, servers configured by Ansible, app deployed and running.
 
-**Layer 2 — Security rules**
-- Bastion: only accepts SSH from your IP
-- Web server: only accepts SSH from bastion, and app traffic from the load balancer
-- Load balancer: accepts HTTP/HTTPS from anywhere
+#DevOps #Ansible #AWS #MERN #LearningInPublic #CloudComputing
 
-**Layer 3 — The machines**
-- 1 Bastion EC2 instance in public subnet
-- 1 or 2 Web server EC2 instances in private subnet
+Phase 4 done. My app is live on AWS. And it was not easy. 😅
 
-**Layer 4 — The load balancer**
-- Application Load Balancer in the public subnet
-- Target group pointing to your web servers
-- Listener on port 80
+I thought deployment would be the simple part. Write some Ansible tasks, run the playbook, done.
 
-**Layer 5 — Outputs**
-- After everything is created, output the IPs and DNS so Ansible can use them
+Nope.
 
-Think of Terraform state as a memory file — it remembers what it already created so it doesn't duplicate things. Store this in an S3 bucket (remote state).
+Here is what actually happened:
 
----
+❌ PM2 kept crashing because Ansible ran it as root
+❌ Git refused to clone because the folder was owned by root
+❌ MongoDB refused connections from web servers
+❌ React was looking for build files in the wrong folder
+❌ The .env file was missing the MongoDB connection string
 
-## Phase 2 — The Bridge: Terraform → Ansible
+Every single issue had a different root cause. Each one taught me something real about Linux, permissions, and how applications actually run in production.
 
-This is a small but important thinking step.
+After debugging all of it:
 
-Ansible needs to know **which servers to configure and how to reach them**. You tell it through an **inventory file**.
+✅ Both web servers running the app on port 5000
+✅ React frontend built with the ALB URL baked in
+✅ MongoDB connected and storing data
+✅ PM2 keeping the app alive as the ubuntu user
+✅ Load Balancer showing both targets as healthy
 
-The flow is:
-1. Terraform finishes and outputs the bastion public IP and web server private IPs
-2. You (or a script) take those outputs and write them into an Ansible inventory file
-3. The inventory file also tells Ansible: *"to reach the web server, jump through the bastion first"*
+Then I opened the browser, typed the ALB DNS name, and saw my TaskFlow app running live on AWS.
 
-This SSH jump is called a **ProxyJump** — Ansible connects to bastion first, then hops to the private server through it. You never expose your web server publicly.
+The thing that surprised me most:
+React gets built ON the server, not locally. Because the API URL (the Load Balancer DNS) only exists after Terraform creates the infrastructure. You cannot know it in advance.
 
----
+That is the kind of thing you only learn by doing.
 
-## Phase 3 — Ansible: Think in Roles
+This is Phase 4 of my DevOps project: deploying a MERN app on AWS using Terraform + Ansible.
 
-Ansible's job is to take a blank Ubuntu server and make it app-ready. Think of it as a checklist that runs automatically.
+#DevOps #Ansible #AWS #MERN #LearningInPublic #CloudComputing
 
-Structure your Ansible work into **roles** (separate folders of tasks):
 
-**Role 1 — common**
-Things every server needs: update packages, set timezone, install basic utilities
+# MERN Stack Deployment on AWS — Terraform + Ansible
 
-**Role 2 — nodejs**
-Install Node.js and npm, install PM2 (the process manager that keeps your app alive even after crashes)
+A production-grade deployment of a MERN (MongoDB, Express, React, Node.js) todo application on AWS, built entirely with Infrastructure as Code and Configuration Management.
 
-**Role 3 — app**
-- Copy your MERN app code to the server
-- Run `npm install`
-- Create the `.env` file with the MongoDB connection string
-- Start the app with PM2
+> Built as a hands-on DevOps project to demonstrate real-world skills in cloud infrastructure, automation, and secure deployment practices.
 
-The key mental model for Ansible is **idempotency** — if you run it 10 times, the result is the same. Tasks should check "is this already done?" before doing it again.
 
----
+## What This Project Does
 
-## Phase 4 — App Deployment
+This project takes a MERN todo application and deploys it on AWS in the way real production systems are built:
 
-By the time Ansible runs the `app` role, your server should have Node.js and your code. The deployment thinking is:
+- Infrastructure is **not created manually** — it is provisioned using Terraform
+- Servers are **not configured manually** — they are configured using Ansible
+- Application is **not exposed directly** — traffic flows through a Load Balancer
+- Servers are **not publicly accessible** — they are secured inside private networks
 
-- Backend runs on port 5000 (Express)
-- Frontend is built (`npm run build`) and served either by Express itself or Nginx
-- PM2 starts the backend and keeps it running
-- The load balancer forwards port 80 traffic to port 5000 on your web servers
 
-One important decision: **how does your React frontend talk to your backend?** In production, you can't use `localhost`. The frontend needs to call the Load Balancer's DNS name. This is an environment variable in your React app at build time.
+## Architecture
 
----
+```
+User
+  │
+  │ HTTP port 80
+  ▼
+Application Load Balancer (public subnet)
+  │
+  │ port 5000 (round robin)
+  ├──────────────────┐
+  ▼                  ▼
+Web Server 1      Web Server 2        (private subnet)
+  │                  │
+  └────────┬─────────┘
+           │ port 27017
+           ▼
+     MongoDB Server                   (private subnet)
 
-## Phase 5, 6, 7 — Traffic, Security, Documentation
+Admin access:
+Your Laptop → Bastion Host → Private Servers
+              (public)       (SSH only via bastion)
+```
 
-These are validation phases, not building phases. The thinking is:
 
-- Can you open the ALB DNS in a browser and see your app? ✅
-- Can you NOT SSH directly to the web server (only through bastion)? ✅
-- Is MongoDB not exposed to the internet? ✅
-- Does the app survive a server restart (PM2 handles this)? ✅
+
+## Project Structure
+
+```
+Ansible-Terraform/
+├── todo-app/                    # MERN application
+│   ├── backend/                 # Node.js + Express API
+│   └── frontend/                # React frontend
+│
+├── terraform/                   # Infrastructure as Code
+│   ├── provider.tf
+│   ├── backend.tf               # Remote state (S3)
+│   ├── main.tf                  # Root orchestrator
+│   ├── variables.tf
+│   ├── outputs.tf
+│   ├── terraform.tfvars
+│   ├── backend/                 # Bootstrap (S3 + DynamoDB)
+│   └── modules/
+│       ├── vpc/                 # Network layer
+│       ├── compute/             # EC2 instances
+│       └── alb/                 # Load balancer
+│
+└── ansible/                     # Configuration Management
+    ├── ansible.cfg
+    ├── inventory/
+    │   └── hosts.ini            # Server inventory
+    ├── playbooks/
+    │   ├── webservers.yml       # Web server playbook
+    │   └── mongodb.yml          # MongoDB playbook
+    └── roles/
+        ├── common/              # Base system setup
+        ├── nodejs/              # Node.js + PM2
+        ├── mongodb/             # MongoDB installation
+        └── app/                 # Application deployment
+```
+
+
+## Infrastructure Details
+
+### AWS Resources (25 total)
+
+| Resource | Count | Purpose |
+|---|---|---|
+| VPC | 1 | Private network — 10.0.0.0/16 |
+| Public Subnet | 2 | Bastion host + ALB requirement |
+| Private Subnet | 1 | Web servers + MongoDB |
+| Internet Gateway | 1 | Public internet access |
+| NAT Gateway | 1 | Private subnet outbound only |
+| Elastic IP | 1 | Static IP for NAT Gateway |
+| Route Tables | 2 | Public (IGW) + Private (NAT) |
+| Route Table Associations | 3 | Subnet to route table links |
+| Security Groups | 4 | ALB, Bastion, Web Server, MongoDB |
+| EC2 Instances | 4 | Bastion, 2x Web Server, MongoDB |
+| Application Load Balancer | 1 | Internet-facing traffic entry |
+| Target Group | 1 | Web server pool with health checks |
+| Target Group Attachments | 2 | Web server registrations |
+| ALB Listener | 1 | Port 80 forwarding rule |
+
+### Security Groups — Access Chain
+
+```
+ALB Security Group
+  inbound:  port 80 from 0.0.0.0/0
+  outbound: all
+
+Bastion Security Group
+  inbound:  port 22 from your IP only
+  outbound: all
+
+Web Server Security Group
+  inbound:  port 22 from bastion SG
+  inbound:  port 5000 from ALB SG
+  outbound: all
+
+MongoDB Security Group
+  inbound:  port 22 from bastion SG
+  inbound:  port 27017 from web server SG
+  outbound: all
+```
+
+Every access path is enforced. Nothing can skip a step.
+
+### Remote State
+
+Terraform state is stored remotely in S3 with:
+- Versioning enabled (recover from accidental changes)
+- Server-side encryption (AES-256)
+- Public access blocked
+- DynamoDB state locking (prevents concurrent modifications)
+
+
+## Application Details
+
+### Stack
+- **Frontend** — React 18, served as static files by Express
+- **Backend** — Node.js + Express REST API
+- **Database** — MongoDB 7.0
+- **Process Manager** — PM2 (keeps app alive, auto-restarts on crash)
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | /api/todos | Fetch all todos |
+| POST | /api/todos | Create a todo |
+| PUT | /api/todos/:id | Toggle complete |
+| DELETE | /api/todos/:id | Delete a todo |
+| GET | /health | ALB health check |
+
+### Why React Builds on the Server
+
+React needs to know the API URL at build time — it gets baked into the JavaScript bundle. The API URL is the ALB DNS name which only exists after Terraform creates the infrastructure. So the build happens during Ansible deployment with the real URL injected as an environment variable.
+
+
+## Ansible Roles
+
+| Role | Runs On | What It Does |
+|---|---|---|
+| common | all servers | apt update, install utilities |
+| nodejs | web servers | Node.js 18, npm, PM2 |
+| mongodb | mongodb server | MongoDB 7.0, bindIp config, service |
+| app | web servers | clone repo, npm install, build React, start with PM2 |
+
+
+
+## How to Deploy
+
+### Prerequisites
+
+- AWS account with IAM user and programmatic access
+- AWS CLI configured (`aws configure`)
+- Terraform installed
+- Ansible installed
+- SSH key pair created in AWS console (ap-south-1)
+
+### Step 1 — Create Remote State Backend
+
+```bash
+cd terraform/backend
+terraform init
+terraform apply
+```
+
+### Step 2 — Provision Infrastructure
+
+```bash
+cd terraform
+cp terraform.tfvars.example terraform.tfvars
+# Fill in your values: region, your_ip, key_name etc.
+terraform init
+terraform plan
+terraform apply
+```
+
+Note the outputs — you will need them for Ansible.
+
+### Step 3 — Update Ansible Inventory
+
+Edit `ansible/inventory/hosts.ini` with IPs from terraform output:
+
+```ini
+[bastion]
+bastion-host ansible_host=BASTION_PUBLIC_IP
+
+[webservers]
+web1 ansible_host=WEB_SERVER_1_PRIVATE_IP
+web2 ansible_host=WEB_SERVER_2_PRIVATE_IP
+
+[mongodb]
+db ansible_host=MONGODB_PRIVATE_IP
+```
+
+### Step 4 — Update Playbook Variables
+
+Edit `ansible/playbooks/webservers.yml`:
+
+```yaml
+vars:
+  mongodb_ip: "MONGODB_PRIVATE_IP"
+  alb_dns_name: "YOUR_ALB_DNS_NAME"
+```
+
+### Step 5 — Deploy Application
+
+```bash
+cd ansible
+ansible all -m ping                          # verify connectivity
+ansible-playbook playbooks/mongodb.yml       # configure database first
+ansible-playbook playbooks/webservers.yml    # configure web servers
+```
+
+### Step 6 — Access the App
+
+Open in browser:
+```
+http://YOUR_ALB_DNS_NAME
+```
+
+### Step 7 — Destroy When Done
+
+```bash
+cd terraform
+terraform destroy
+```
+
+Always destroy when finished to avoid AWS charges.
+
+
+
+## Key Design Decisions
+
+**Why private subnet for web servers?**
+Web servers do not need public IPs. Users reach them through the ALB. Keeping them private means they are invisible to the internet — no port scanning, no direct SSH attempts, no bypass of the load balancer.
+
+**Why a Bastion host?**
+The only way to SSH into private servers. One hardened entry point instead of exposing every server. Only your IP can reach it on port 22.
+
+**Why two web servers?**
+High availability. If one server crashes the ALB detects it through health checks and routes all traffic to the other. Users experience zero downtime.
+
+**Why MongoDB on a separate server?**
+Separation of concerns. Database and application have different resource needs and security profiles. Keeping them separate means a compromised app server cannot directly access the database filesystem.
+
+**Why NAT Gateway in the public subnet?**
+Private servers need outbound internet access to download packages. NAT Gateway allows outbound-only traffic — it translates private IPs to its public Elastic IP for outbound requests but blocks all incoming connections.
+
+**Why Terraform modules?**
+Each module owns a clear domain — vpc, compute, alb. Changes to one module do not affect others. Outputs flow cleanly from one module to the next. Reflects how real teams organize infrastructure code.
+
+
+
+## Tools Used
+
+| Tool | Version | Purpose |
+|---|---|---|
+| Terraform | >= 1.0 | Infrastructure provisioning |
+| Ansible | >= 2.14 | Server configuration and deployment |
+| AWS | — | Cloud provider |
+| Node.js | 18 | Backend runtime |
+| MongoDB | 7.0 | Database |
+| PM2 | latest | Process management |
+| React | 18 | Frontend framework |
+
+
+
+## Cost Estimate
+
+Running this infrastructure costs approximately:
+
+| Resource | Cost/hour |
+|---|---|
+| NAT Gateway | $0.045 |
+| ALB | $0.0225 |
+| EC2 t2.micro × 4 | $0.046 |
+| **Total** | **~$0.11/hour** |
+
+Always run `terraform destroy` when done. Leaving it running overnight costs ~$2.60.
+
+
+
+## Project Documentation
+
+Detailed notes for each phase are in the `ReadME/` folder:
+
+- `vpc-module-notes.md` — VPC networking explained
+- `compute-module-notes.md` — EC2 instances and modules
+- `alb-module-notes.md` — Load balancer configuration
+- `state-locking-notes.md` — Remote state and S3 backend
+- `phase1-readme.md` — Full Terraform phase documentation
+- `phase2-readme.md` — Ansible inventory and SSH ProxyJump
+- `phase3-readme.md` — Ansible roles and playbooks
+- `phase4-readme.md` — Application deployment
+- `phase3-fixes-readme.md` — Debugging and lessons learned
+
+
+
+## What I Learned
+
+This project taught me how infrastructure, configuration, and application deployment connect in a real production system. Key takeaways:
+
+- Infrastructure as Code makes environments reproducible and version controlled
+- Private subnets and security group chains are how production systems stay secure
+- Ansible roles separate concerns cleanly — one role, one job
+- Real deployments always hit unexpected issues (PM2 root conflicts, path mismatches, MongoDB bind config) — debugging is a core skill
+- Documentation is as important as the code itself
